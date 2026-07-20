@@ -1,0 +1,88 @@
+{% extends 'base.html' %}{% block content %}
+<div class="grid">
+ <div class="card"><div class="muted">Righe storico</div><div class="metric">{{totals.snapshots or 0}}</div></div>
+ <div class="card"><div class="muted">Macchine</div><div class="metric">{{totals.machines or 0}}</div></div>
+ <div class="card"><div class="muted">Locali</div><div class="metric">{{totals.locations or 0}}</div></div>
+ <div class="card"><div class="muted">Periodo</div><div class="metric small">{{totals.first_date or '-'}}<br>{{totals.last_date or '-'}}</div></div>
+</div>
+
+<div class="grid">
+ <div class="card status-card green"><div class="muted">Aggiornate oggi &lt; 3 ore</div><div class="metric">{{status_counts.today_3h or 0}}</div></div>
+ <div class="card status-card yellow"><div class="muted">Aggiornate oggi &gt; 3 ore</div><div class="metric">{{status_counts.today_old or 0}}</div></div>
+ <div class="card status-card orange"><div class="muted">Ultima lettura ieri</div><div class="metric">{{status_counts.yesterday or 0}}</div></div>
+ <div class="card status-card red"><div class="muted">Da aggiornare</div><div class="metric">{{status_counts.update or 0}}</div></div>
+</div>
+
+<div class="card">
+  <h2 class="title">Import sinottico</h2>
+  <form id="uploadForm" class="toolbar" action="/upload" method="post" enctype="multipart/form-data">
+    <div><label>File XLSX o ZIP<br><input id="fileInput" type="file" name="file" accept=".xlsx,.zip" required></label></div>
+    <div><label>Divisore contatori<br><input name="divisor" value="100" style="width:100px"></label></div>
+    <button id="uploadBtn">Carica e aggiorna database</button>
+  </form>
+  <div id="uploadProgress" class="progress-wrap" style="display:none">
+    <div class="progress-head"><strong>Importazione in corso</strong><span id="progressText">0%</span></div>
+    <div class="progress-bar"><div id="progressFill"></div></div>
+    <div id="progressDetail" class="muted small">Lettura file e aggiornamento archivio...</div>
+  </div>
+  <div id="uploadResult" class="import-result" style="display:none"></div>
+  {% if last_import %}
+  <p class="muted small">Ultimo import: {{last_import.filename}} — {{last_import.files_processed}} sinottici, {{last_import.rows_inserted}} nuove letture, {{last_import.rows_skipped}} duplicati scartati.</p>
+  {% else %}
+  <p class="muted small">Il programma aggiunge solo le letture nuove. Se carichi lo stesso sinottico due volte non duplica i dati.</p>
+  {% endif %}
+</div>
+
+
+<div class="card">
+  <h2 class="title">Importa da repository GitHub</h2>
+  <p class="muted">Il programma cerca ricorsivamente solo file che iniziano con <b>Sinottico</b> e ignora ogni altro contenuto della repository.</p>
+  <form id="githubForm" class="toolbar" action="/github-import" method="post">
+    <div><label>URL repository<br><input name="repo_url" value="{{github_cfg.repo_url if github_cfg else ''}}" placeholder="https://github.com/utente/repository" style="width:360px" required></label></div>
+    <div><label>Branch<br><input name="branch" value="{{github_cfg.branch if github_cfg else 'main'}}" style="width:110px"></label></div>
+    <div><label>Cartella opzionale<br><input name="folder" value="{{github_cfg.folder if github_cfg else ''}}" placeholder="sinottici/2026" style="width:180px"></label></div>
+    <input type="hidden" name="divisor" value="100">
+    <button id="githubBtn">Importa nuovi sinottici</button>
+  </form>
+  <div id="githubProgress" class="progress-wrap" style="display:none"><div class="progress-head"><strong>Importazione GitHub</strong><span id="githubProgressText">0%</span></div><div class="progress-bar"><div id="githubProgressFill"></div></div><div id="githubProgressDetail" class="muted small">Lettura repository e confronto con i file già importati...</div></div>
+  <div id="githubResult" class="import-result" style="display:none"></div>
+  <p class="muted small">Per una repository privata imposta su Render la variabile ambiente <b>GITHUB_TOKEN</b>. Per una repository pubblica non serve.</p>
+</div>
+<div class="card"><h2 class="title">Lista macchine</h2><form class="toolbar" method="get"><div><label>Cerca<br><input name="q" value="{{q}}" placeholder="CODEID, modello, locale, comune"></label></div><div><label>Ordina per<br><select name="sort"><option value="pay_first" {{'selected' if sort=='pay_first'}}>Più sotto payout / più propense teoricamente</option><option value="need_in" {{'selected' if sort=='need_in'}}>Sopra payout / devono assorbire IN</option><option value="cycle_end" {{'selected' if sort=='cycle_end'}}>Più vicine a fine ciclo stimato</option><option value="low_counters" {{'selected' if sort=='low_counters'}}>Contatori IN più bassi</option><option value="high_counters" {{'selected' if sort=='high_counters'}}>Contatori IN più alti</option><option value="played_most" {{'selected' if sort=='played_most'}}>Giocato di più nello storico</option><option value="margin" {{'selected' if sort=='margin'}}>Margine più alto</option><option value="location" {{'selected' if sort=='location'}}>Per locale</option><option value="city" {{'selected' if sort=='city'}}>Per comune</option></select></label></div><button>Applica</button></form><p class="muted small">“Più propensa” è solo scostamento matematico dal payout, non previsione o garanzia di vincita.</p>
+<div class="table-scroll"><table><thead><tr><th>Stato lettura</th><th>Macchina</th><th>Modello</th><th>Cod. modello</th><th>Locale</th><th>Comune</th><th class="right">IN</th><th class="right">OUT</th><th class="right">Payout reale</th><th class="right">Ciclo</th><th class="right">Pos. ciclo</th><th class="right">Fine ciclo</th><th class="right">OUT teorico da riallineare</th><th class="right">IN stimato da assorbire</th><th class="right">Giocato</th></tr></thead><tbody>{% for m in machines %}<tr><td><span class="sem {{m.read_status.class}}"></span><span class="small"><strong>{{m.read_status.label}}</strong><br><span class="muted">{{m.read_status.detail}}</span></span></td><td><a href="/machine/{{m.codeid}}">{{m.codeid}}</a></td><td>{{m.modello}}</td><td class="nowrap">{{m.codice_modello}}</td><td>{{m.sede_nome}}</td><td>{{m.comune}}</td><td class="right">{{'%.2f'|format(m.cnt_in or 0)}}</td><td class="right">{{'%.2f'|format(m.cnt_out or 0)}}</td><td class="right">{{m.payout_real or 0}}%</td><td class="right">{{'%.0f'|format(m.ciclo or 0)}}</td><td class="right">{{'%.2f'|format(m.cycle_pos or 0)}}</td><td class="right">{{'%.2f'|format(m.cycle_remaining or 0)}}</td><td class="right {{'bad' if m.out_to_realign_now and m.out_to_realign_now>0 else 'good'}}">{{'%.2f'|format(m.out_to_realign_now or 0)}}</td><td class="right">{{'%.2f'|format(m.in_to_realign_no_out or 0)}}</td><td class="right">{{'%.2f'|format(m.period_in or 0)}}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><form action="/reset" method="post" onsubmit="return confirm('Sicuro di svuotare lo storico?')"><button class="danger">Svuota archivio sinottici</button></form></div>
+<script>
+const form = document.getElementById('uploadForm');
+const wrap = document.getElementById('uploadProgress');
+const fill = document.getElementById('progressFill');
+const txt = document.getElementById('progressText');
+const detail = document.getElementById('progressDetail');
+const result = document.getElementById('uploadResult');
+const btn = document.getElementById('uploadBtn');
+let fakeTimer;
+function setProgress(n, msg){ fill.style.width=n+'%'; txt.textContent=n+'%'; if(msg) detail.textContent=msg; }
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  result.style.display='none'; result.innerHTML=''; wrap.style.display='block'; btn.disabled=true; setProgress(3,'Invio file al programma...');
+  let p=3; fakeTimer=setInterval(()=>{ if(p<88){ p += Math.max(1, Math.round((90-p)/8)); setProgress(p,'Elaborazione sinottici e controllo duplicati...'); } }, 500);
+  try{
+    const res = await fetch('/upload', {method:'POST', body:new FormData(form), headers:{'X-Requested-With':'fetch','Accept':'application/json'}});
+    const data = await res.json();
+    clearInterval(fakeTimer);
+    if(!res.ok || !data.ok){ throw new Error(data.message || 'Errore import'); }
+    setProgress(100,'Import completato. Aggiorno la pagina...');
+    result.className='import-result ok'; result.style.display='block';
+    result.innerHTML=`<strong>${data.message}</strong><br>Sinottici elaborati: ${data.files} · Righe lette: ${data.rows} · Nuove: ${data.inserted} · Duplicate scartate: ${data.skipped}`;
+    setTimeout(()=>location.reload(), 1200);
+  }catch(err){
+    clearInterval(fakeTimer); setProgress(100,'Import interrotto');
+    result.className='import-result error'; result.style.display='block'; result.textContent=err.message; btn.disabled=false;
+  }
+});
+</script>
+
+<script>
+const ghForm=document.getElementById('githubForm');
+if(ghForm){ghForm.addEventListener('submit',async(e)=>{e.preventDefault();const wrap=document.getElementById('githubProgress'),fill=document.getElementById('githubProgressFill'),txt=document.getElementById('githubProgressText'),detail=document.getElementById('githubProgressDetail'),result=document.getElementById('githubResult'),btn=document.getElementById('githubBtn');wrap.style.display='block';result.style.display='none';btn.disabled=true;let p=5;fill.style.width=p+'%';txt.textContent=p+'%';const timer=setInterval(()=>{if(p<90){p+=Math.max(1,Math.round((92-p)/10));fill.style.width=p+'%';txt.textContent=p+'%';detail.textContent='Download dei file Sinottico e controllo duplicati...';}},600);try{const r=await fetch('/github-import',{method:'POST',body:new FormData(ghForm),headers:{'X-Requested-With':'fetch','Accept':'application/json'}});const d=await r.json();clearInterval(timer);if(!r.ok||!d.ok)throw new Error(d.message||'Errore GitHub');fill.style.width='100%';txt.textContent='100%';detail.textContent='Import completato';result.className='import-result ok';result.style.display='block';result.innerHTML='<strong>'+d.message+'</strong>';setTimeout(()=>location.reload(),1400);}catch(err){clearInterval(timer);fill.style.width='100%';txt.textContent='100%';detail.textContent='Import interrotto';result.className='import-result error';result.style.display='block';result.textContent=err.message;btn.disabled=false;}});}
+</script>
+{% endblock %}

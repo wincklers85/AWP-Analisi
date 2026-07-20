@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}
+<div class="card"><h2 class="title">Locali</h2><p class="muted">Elenco locali ordinato per giocato storico. Aprendo un locale vedi macchine correnti, macchine avute in passato e confronto con la media dello stesso modello negli altri locali.</p></div>
+<div class="card"><table><thead><tr><th>Locale</th><th>Comune</th><th class="right">Macchine correnti</th><th class="right">Giocato periodo</th></tr></thead><tbody>{% for l in locations %}<tr><td><a href="/location/{{l.sede_code}}">{{l.sede_nome}}</a><br><span class="muted small">{{l.sede_code}}</span></td><td>{{l.comune}}</td><td class="right">{{l.active_machines}}</td><td class="right">{{'%.2f'|format(l.played or 0)}}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends 'base.html' %}{% block content %}
+<div class="card callout">
+  <h2 class="title">Analizza · Indice di propensione statistica</h2>
+  <p class="muted">Classifica gestionale da 0 a 100 basata su scostamento dal payout teorico, posizione stimata nel ciclo, continuità di gioco, confronto con lo stesso modello e freschezza dei dati. <b>Non rappresenta una probabilità matematica né garantisce un pagamento.</b></p>
+</div>
+
+<div class="grid">
+  <div class="card status-card green"><div class="muted">Indice alto</div><div class="metric">{{summary.high}}</div></div>
+  <div class="card status-card orange"><div class="muted">Indice medio</div><div class="metric">{{summary.medium}}</div></div>
+  <div class="card status-card red"><div class="muted">Indice basso</div><div class="metric">{{summary.low}}</div></div>
+  <div class="card"><div class="muted">Media indice</div><div class="metric">{{'%.1f'|format(summary.average)}}</div></div>
+</div>
+
+<div class="card">
+  <form method="get" class="toolbar">
+    <label><span class="small muted">Ricerca</span><br><input name="q" value="{{filters.q}}" placeholder="CODEID, modello, locale"></label>
+    <label><span class="small muted">Modello</span><br><select name="model"><option value="">Tutti</option>{% for v in models %}<option value="{{v}}" {% if filters.model==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+    <label><span class="small muted">Locale</span><br><select name="location"><option value="">Tutti</option>{% for v in locations %}<option value="{{v}}" {% if filters.location==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+    <label><span class="small muted">Comune</span><br><select name="municipality"><option value="">Tutti</option>{% for v in municipalities %}<option value="{{v}}" {% if filters.municipality==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+    <label><span class="small muted">Fascia</span><br><select name="band"><option value="">Tutte</option><option value="green" {% if filters.band=='green' %}selected{% endif %}>Alta</option><option value="orange" {% if filters.band=='orange' %}selected{% endif %}>Media</option><option value="red" {% if filters.band=='red' %}selected{% endif %}>Bassa</option></select></label>
+    <button type="submit">Applica filtri</button><a class="btn secondary" href="/analysis">Azzera</a>
+  </form>
+</div>
+
+<div class="card"><div class="table-scroll"><table>
+<thead><tr><th>#</th><th>Indice</th><th>Macchina</th><th>Modello / locale</th><th>Motivazione</th><th>Aggiornamento</th><th class="right">Scostamento</th><th class="right">Ciclo</th><th class="right">IN stimato</th></tr></thead>
+<tbody>{% for m in machines %}
+<tr>
+  <td><b>{{loop.index}}</b></td>
+  <td class="nowrap"><span class="sem {{m.signal}}"></span><b>{{'%.1f'|format(m.score)}}</b><br><span class="small muted">{{m.signal_label}}</span><div class="scorebar" title="Indice {{m.score}}"><span style="width:{{m.score}}%"></span></div><span class="small muted">Affidabilità dati {{m.confidence}}%</span></td>
+  <td><a href="/machine/{{m.codeid}}"><b>{{m.codeid}}</b></a><br><span class="small muted">{{m.comune}}</span></td>
+  <td><b>{{m.modello}}</b><br><span class="small muted">{{m.sede_nome}}</span></td>
+  <td>
+    {% for text in m.reasons %}<div class="small good">✓ {{text}}</div>{% endfor %}
+    {% for text in m.risks %}<div class="small warn">⚠ {{text}}</div>{% endfor %}
+    <details><summary class="small">Vedi calcolo</summary>{% for name,value in m.components %}<div class="small">{{name}}: <b class="{{'good' if value>=0 else 'bad'}}">{{'%+.1f'|format(value)}}</b></div>{% endfor %}</details>
+  </td>
+  <td><span class="sem {{m.read_status.class}}"></span>{{m.read_status.label}}<br><span class="small muted">{{m.read_status.detail}}</span></td>
+  <td class="right {{'good' if m.payout_gap>0 else 'bad'}}">€ {{'%.2f'|format(m.payout_gap or 0)}}</td>
+  <td class="right">{% if m.cycle_progress is not none %}{{'%.1f'|format(m.cycle_progress)}}%<br><span class="small muted">residuo € {{'%.0f'|format(m.cycle_remaining or 0)}}</span>{% else %}<span class="bad">non configurato</span>{% endif %}</td>
+  <td class="right">{% if m.estimated_in is not none %}€ {{'%.0f'|format(m.estimated_in)}}{% else %}—{% endif %}</td>
+</tr>{% else %}<tr><td colspan="9">Nessuna macchina corrisponde ai filtri selezionati.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}{% block content %}
+<div class="card"><h2 class="title">Statistiche generali</h2><p class="muted">Analisi aggregata sui sinottici caricati: modelli, comuni, picchi di giocato e trend mensile.</p></div>
+<div class="grid">
+ <div class="card"><div class="muted">Modelli analizzati</div><div class="metric">{{model_stats|length}}</div></div>
+ <div class="card"><div class="muted">Miglior modello storico</div><div class="metric small">{{model_stats[0].modello if model_stats else '-'}}</div></div>
+ <div class="card"><div class="muted">Comune più forte</div><div class="metric small">{{top_city[0].comune if top_city else '-'}}</div></div>
+ <div class="card"><div class="muted">Giocato comune top</div><div class="metric">{{'%.0f'|format(top_city[0].played or 0) if top_city else '-'}}</div></div>
+</div>
+<div class="card">
+  <h2 class="title">Statistiche modelli</h2>
+  {% if not model_stats %}<p class="muted">Non ci sono ancora abbastanza letture per calcolare statistiche. Carica almeno due sinottici con contatori diversi.</p>{% endif %}
+  <div class="table-scroll"><table><thead><tr><th>Modello</th><th class="right">Giocato totale</th><th class="right">Media mensile</th><th>Mese picco</th><th class="right">Picco</th><th>Ultimo mese</th><th class="right">Ultimo giocato</th><th class="right">Trend vs media</th><th>Grafico</th></tr></thead><tbody>
+  {% for m in model_stats %}<tr><td>{{m.modello}}</td><td class="right">{{'%.2f'|format(m.total_in or 0)}}</td><td class="right">{{'%.2f'|format(m.avg_month or 0)}}</td><td>{{m.peak_month}}</td><td class="right">{{'%.2f'|format(m.peak_in or 0)}}</td><td>{{m.last_month}}</td><td class="right">{{'%.2f'|format(m.last_in or 0)}}</td><td class="right {{'good' if m.trend_vs_avg and m.trend_vs_avg>0 else 'bad'}}">{{'%.2f'|format(m.trend_vs_avg or 0)}}</td><td><button type="button" onclick="showModel({{m.modello|tojson}})">Apri</button></td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="card"><h2 class="title">Grafico modello selezionato</h2><div class="chartbox"><canvas id="modelChart"></canvas></div></div>
+<div class="card"><h2 class="title">Modelli per comune</h2><p class="muted">Classifica incasso storico per coppia modello/comune.</p><div class="table-scroll"><table><thead><tr><th>Modello</th><th>Comune</th><th class="right">Giocato</th></tr></thead><tbody>{% for r in city_model %}<tr><td>{{r.modello}}</td><td>{{r.comune}}</td><td class="right">{{'%.2f'|format(r.total_in or 0)}}</td></tr>{% endfor %}</tbody></table></div></div>
+<script>
+let chart;
+function showModel(model){
+ fetch('/api/model/'+encodeURIComponent(model)).then(r=>r.json()).then(data=>{
+  const labels=data.map(x=>x.mese);
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById('modelChart'),{type:'line',data:{labels,datasets:[{label:'IN mensile '+model,data:data.map(x=>x.in_mese)},{label:'OUT mensile '+model,data:data.map(x=>x.out_mese)}]},options:{responsive:true,maintainAspectRatio:false}});
+ });
+}
+{% if model_stats %}showModel({{model_stats[0].modello|tojson}});{% endif %}
+</script>
+{% endblock %}
