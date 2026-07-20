@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: awp-analytics
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --threads 4 --timeout 300 app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MAX_UPLOAD_MB
+        value: 500
+      - key: GITHUB_TOKEN
+        sync: false
+    disk:
+      name: awp-data
+      mountPath: /opt/render/project/src/instance
+      sizeGB: 1
